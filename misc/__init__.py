@@ -1,0 +1,1 @@
+from .citates import get_citate
