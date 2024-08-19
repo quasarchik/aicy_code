@@ -3,14 +3,15 @@ import ast, random
 
 from database import DatabaseManager
 from utils import texts
-from utils import util
+from utils import util, log_bot
 from pyrogram import enums, Client, filters
 
-def register_all_profile_handlers(app: Client, db: DatabaseManager, log_bot, log_warn):
+def register_all_profile_handlers(app: Client, db: DatabaseManager, log_warn):
+
     @app.on_message(filters.command(['ник'], prefixes=['+', '-']))
     async def nick_change(_, msg):
         await util.check_user(db, msg)
-        log_bot(msg)
+        await log_bot(msg)
         text = " ".join(msg.text.split(' ')[1:])
         if text.strip() == "":
             db.update_data('users', 'id = ?', (msg.from_user.id,), custom_nickname=None)
@@ -24,7 +25,7 @@ def register_all_profile_handlers(app: Client, db: DatabaseManager, log_bot, log
     @app.on_message(filters.command(['пол'], prefixes=['+', '-']))
     async def gender_change(_, msg):
         await util.check_user(db, msg)
-        log_bot(msg)
+        await log_bot(msg)
         text = " ".join(msg.text.split(' ')[1:])
         
         if text.strip() == "":
@@ -44,7 +45,7 @@ def register_all_profile_handlers(app: Client, db: DatabaseManager, log_bot, log
     @app.on_message(filters.command(['др'], prefixes=['+', '-']))
     async def birthdate_change(_, msg):
         await util.check_user(db, msg)
-        log_bot(msg)
+        await log_bot(msg)
         text = " ".join(msg.text.split(' ')[1:])
         
         if text.strip() == "":
@@ -67,11 +68,11 @@ def register_all_profile_handlers(app: Client, db: DatabaseManager, log_bot, log
             except ValueError:
                 await msg.reply_text(texts.msg_birthdate_invalid)
 
-    
     @app.on_message(filters.command(['город'], prefixes=['+', '-']))
     async def city_change(_, msg):
         await util.check_user(db, msg)
-        log_bot(msg)
+        await log_bot(msg)
+
         text = " ".join(msg.text.split(' ')[1:])
         if text.strip() == "":
             db.update_data('users', 'id = ?', (msg.from_user.id,), city=None)
@@ -85,7 +86,7 @@ def register_all_profile_handlers(app: Client, db: DatabaseManager, log_bot, log
     @app.on_message(filters.command(['мой'], prefixes=['']))
     async def get_profile_info(_, msg):
         await util.check_user(db, msg)
-        log_bot(msg)
+        await log_bot(msg)
         text = " ".join(msg.text.split(' ')[1:])
         users = db.find_by_column('users', 'id', msg.from_user.id)
         if users:

@@ -1,18 +1,13 @@
 import ast
 import re
-from utils.logs import log_warn
 import time
 from random import randint, seed, choice, shuffle
-import numpy as np
-import yt_dlp
 import requests
 from bs4 import BeautifulSoup
 from pyrogram import enums
 from utils import texts
 from datetime import datetime, timedelta
-from PIL import Image, ImageDraw, ImageFont
-import cv2
-from moviepy.editor import VideoFileClip
+
 
 async def write_intel_data(db, msg):
     if msg.text is None or msg.reply_to_message is None or msg.reply_to_message.text is None and not msg.via_bot:
@@ -32,41 +27,6 @@ async def write_intel_data(db, msg):
     return 0
     
 class main:
-    class Cartoonizer:
-        def __init__(self, numDownSamples=1, numBilateralFilters=7):
-            self.numDownSamples = numDownSamples
-            self.numBilateralFilters = numBilateralFilters
-
-        def render(self, img_rgb):
-
-            # downsample image using Gaussian pyramid
-            img_color = img_rgb
-            for _ in range(self.numDownSamples):
-                img_color = cv2.pyrDown(img_color)
-            # repeatedly apply small bilateral filter instead of applying
-            # one large filter
-            for _ in range(self.numBilateralFilters):
-                img_color = cv2.bilateralFilter(img_color, 9, 9, 7)
-            # upsample image to original size
-            for _ in range(self.numDownSamples):
-                img_color = cv2.pyrUp(img_color)
-            # convert to grayscale and apply bilateral blur
-            img_gray = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2GRAY)
-            for _ in range(self.numBilateralFilters):
-                img_gray_blur = cv2.bilateralFilter(img_gray, 9, 9, 7)
-            # detect and enhance edges
-            img_edge = cv2.adaptiveThreshold(img_gray_blur, 255,
-                                            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                                            cv2.THRESH_BINARY, 9, 5)
-            # convert back to color so that it can be bit-ANDed with color image
-            img_edge = cv2.cvtColor(img_edge, cv2.COLOR_GRAY2RGB)
-            #Ensure that img_color and img_edge are the same size, otherwise bitwise_and will not work
-            height = min(len(img_color), len(img_edge))
-            width = min(len(img_color[0]), len(img_edge[0]))
-            img_color = img_color[0:height, 0:width]
-            img_edge = img_edge[0:height, 0:width]
-            return cv2.bitwise_and(img_color, img_edge)
-    
     async def check_user(db, msg):
         await write_intel_data(db, msg)
         user = db.find_by_column('users', 'id', msg.from_user.id)
@@ -322,6 +282,7 @@ class main:
     
     async def handle_pair_command(app, msg, db, texts):
         seed(100*time.time() * msg.from_user.id)
+
         members = []
         async for m in app.get_chat_members(msg.chat.id, filter=enums.ChatMembersFilter.RECENT):
             if db.exists('users', 'id', m.user.id):
@@ -402,70 +363,6 @@ class main:
         top_users = [(user_names[user_id], count) for user_id, count in sorted_users[:top_n]]
         total_messages = sum(user_message_count.values())
         return top_users, total_messages
-
-    def create_roulette_video(names: list, output_file='temp.mp4', width=600, height=600, cell_height=150, 
-                            rotation_speed=14000, duration=6, freeze_duration=4, fps=60):
-        # Параметры
-        n_cells = height // cell_height + 2
-        if len(names) < n_cells:
-            # Расширяем names до n_cells с помощью случайного выбора
-            while len(names) < n_cells:
-                names.append(choice(names))  # Добавляем случайный элемент из names
-
-        shuffle(names)
-        colors = [tuple(randint(0, 255) for _ in range(3)) for _ in range(n_cells)]
-
-        # Функция для создания кадра
-        def create_frame(position):
-            frame = Image.new('RGB', (width, height), (0, 0, 0))
-            draw = ImageDraw.Draw(frame)
-            font = ImageFont.truetype('source/roulette_font.ttf', 64)  # Путь к вашему шрифту
-
-            for i in range(n_cells):
-                y = (position + i * cell_height) % (height + cell_height) - cell_height
-                if 0 <= y < height:
-                    # Рисуем ячейку
-                    draw.rectangle([0, int(y), width, int(y + cell_height)], fill=colors[i])
-                    # Определяем размеры и положение текста
-                    text = names[i]
-                    text_bbox = draw.textbbox((0, 0), text, font=font)
-                    text_width, text_height = text_bbox[2] - text_bbox[0], text_bbox[3] - text_bbox[1]
-                    text_x = (width - text_width) // 2
-                    text_y = int(y + cell_height / 2 - text_height / 2)
-                    # Рисуем текст по центру ячейки
-                    draw.text((text_x, text_y), text, font=font, fill=(255, 255, 255))
-
-            # Добавляем белую полоску по середине экрана
-            middle_y = height // 2
-            draw.line((0, middle_y, width, middle_y), fill=(255, 0, 255), width=1)
-            
-            return np.array(frame)
-
-        # Настройки анимации
-        total_frames = duration * fps
-        freeze_frames = freeze_duration * fps
-
-        # Создание видео
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        video_writer = cv2.VideoWriter(output_file, fourcc, fps, (width, height))
-
-        # Генерация кадров
-        for frame_number in range(total_frames):
-            position = frame_number * rotation_speed / total_frames
-            frame = create_frame(position)
-            video_writer.write(frame)
-
-        # Генерация кадров для показа последнего состояния
-        last_frame = create_frame(position)
-        for _ in range(freeze_frames):
-            video_writer.write(last_frame)
-
-        # Завершение записи видео
-        video_writer.release()
-        cv2.destroyAllWindows()
-
-        return output_file
-
 
     async def rp_command(app, msg, texts, db):
         user = db.find_by_column('users', 'id', msg.from_user.id)
@@ -577,3 +474,4 @@ class main:
         url = f'https://misterius.ru/viewpage.php?page_id=3&date_man={man_birthdate}&date_woman={woman_birthdate}'
         result = main.parse_sovm(url)
         return choice(result['results'])
+        

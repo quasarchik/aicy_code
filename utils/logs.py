@@ -12,7 +12,7 @@ logger = logging.getLogger("custom_logger")
 logger.setLevel(logging.INFO)
 
 # Создаем обработчик для записи логов в файл
-file_handler = logging.FileHandler("cleaned_file.log", encoding='utf-8')
+file_handler = logging.FileHandler("aicy.log", encoding='utf-8')
 file_handler.setLevel(logging.INFO)
 
 # Создаем обработчик для вывода логов в консоль
@@ -28,7 +28,7 @@ console_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 logger.addHandler(console_handler)
 
-def log_bot(msg):
+async def log_bot(msg):
     # Determine the message type
     if msg.photo:
         msg_type = "PHOTO"
@@ -68,7 +68,6 @@ def log_bot(msg):
     caller_function_name = caller_frame.f_code.co_name
 
     logger.info(f"{caller_function_name}:{caller_line} {log_msg}")
-    return 1
 
 
 def log_start():

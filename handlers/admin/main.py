@@ -1,14 +1,14 @@
 from utils.config import ADMIN_ID
-from pyrogram import errors, filters, Client
-from utils import texts, util
+from pyrogram import errors, filters, Client, types
+from utils import texts, util, log_bot
 from database import DatabaseManager
 
-def register_all_admin_handlers(app: Client, db: DatabaseManager, log_bot, log_warn):
+def register_all_admin_handlers(app: Client, db: DatabaseManager, log_warn):
 
     @app.on_message(filters.command(['set'], prefixes=["/", "!", ".", '']))
     async def set_admin(_, msg):
         await util.check_user(db, msg)
-        log_bot(msg)
+        await log_bot(msg)
 
         if str(msg.from_user.id) != ADMIN_ID:
             return -1
@@ -41,11 +41,10 @@ def register_all_admin_handlers(app: Client, db: DatabaseManager, log_bot, log_w
             else:
                 await msg.reply_text("Не верный формат команды. Используйте '/set <table> <how> <who> <what> <value>'")
 
-
     @app.on_message(filters.command(['del'], prefixes=["/", "!", ".", '']))
     async def del_admin(_, msg):
         await util.check_user(db, msg)
-        log_bot(msg)
+        await log_bot(msg)
 
         if str(msg.from_user.id) != ADMIN_ID:
             return -1
@@ -60,11 +59,10 @@ def register_all_admin_handlers(app: Client, db: DatabaseManager, log_bot, log_w
         else:
             await msg.reply_text("Не верный формат команды")
 
-
     @app.on_message(filters.command(['id'], prefixes=["/", "!", ".", '']))
     async def id_admin(_, msg):
         await util.check_user(db, msg)
-        log_bot(msg)
+        await log_bot(msg)
 
         if str(msg.from_user.id) != ADMIN_ID:
             return -1
@@ -72,41 +70,103 @@ def register_all_admin_handlers(app: Client, db: DatabaseManager, log_bot, log_w
         text = texts.get_info_chat(msg)
         await msg.reply_text(text)
 
-    @app.on_message(filters.command(['анонс'], prefixes=["."]))
+    @app.on_message(filters.private & filters.command(['анонс'], prefixes=["."]))
     async def anonses(client, msg):
         await util.check_user(db, msg)
-        log_bot(msg)
+        await log_bot(msg)
 
         if str(msg.from_user.id) != ADMIN_ID:
             return -1
 
-        text = "\n".join(msg.text.split('\n')[1:])
+        # Получаем ID чата из сообщения, если он указан
+        parts = msg.text.split('\n')
+        if len(parts) < 3:
+            return
+        chat_id = parts[1] if parts[1].lower() != 'all' else None  # Первый элемент после команды
+        text = "\n".join(parts[2:]) if len(parts) > 2 else "\n".join(parts[1:])  # Сообщение, начиная со второго элемента
+
         users = db.fetch_data('users')
         groups = db.fetch_data('groups')
-        
+
         msg_text = f"Отправляю сообщение {len(users)} пользователям и {len(groups)} группам!"
         message = await msg.reply_text(msg_text)
-        await msg.reply_text(text)
-        c = 0
-        for user in users:
+
+        if chat_id:  # Если chat_id указан, отправляем только в него
             try:
-                chat = await client.get_chat(user['id'])
-                if user['id'] != int(ADMIN_ID):
-                    await client.send_message(user['id'], text)
+                await client.send_message(chat_id, text)
+                msg_text += f"\n\nСообщение отправлено в чат с ID {chat_id}!"
+            except Exception as e:
+                msg_text += f"\n\nОшибка при отправке в чат с ID {chat_id}: {e}"
+        else:  # Если chat_id не указан, отправляем всем пользователям и группам
+            c = 0
+            for user in users:
+                try:
+                    chat = await client.get_chat(user['id'])
+                    if user['id'] != int(ADMIN_ID):
+                        await client.send_message(user['id'], text)
+                        c += 1
+                except:
                     pass
-                c += 1
-            except:
-                pass
-        msg_text += f"\n\nОтправлено {c} пользователям!"
-        await message.edit_text(msg_text)
-        c = 0
-        for group in groups:
-            try:
-                chat = await client.get_chat(group['id'])
-                await client.send_message(group['id'], text)
-                c += 1
-            except:
-                pass
-        msg_text += f"\n\nОтправлено {c} группам!"
+            msg_text += f"\n\nОтправлено {c} пользователям!"
+            
+            c = 0
+            for group in groups:
+                try:
+                    chat = await client.get_chat(group['id'])
+                    await client.send_message(group['id'], text)
+                    c += 1
+                except:
+                    pass
+            msg_text += f"\n\nОтправлено {c} группам!"
+
         await message.edit_text(msg_text)
         
+    @app.on_message(filters.private & filters.command(['data'], prefixes=["."]))
+    async def request_database(client, msg):
+        await util.check_user(db, msg)
+        await log_bot(msg)
+
+        if str(msg.from_user.id) != ADMIN_ID:
+            return -1
+
+        message = await client.send_message(
+            chat_id=msg.chat.id,
+            text="Подождите немного, загружаю документ... ⏳"
+        )
+
+        # Путь к файлу, который вы хотите отправить
+        file_path = "aicy.db"
+        await client.send_document(
+            chat_id=msg.chat.id,  # ID чата, куда отправляется файл
+            document=file_path,       # Путь к файлу
+            caption="Вот ваш файл 📄",  # Подпись к файлу
+        )
+        await client.delete_messages(
+            chat_id=msg.chat.id,
+            message_ids=message.id
+        )
+     
+    @app.on_message(filters.private & filters.command(['logs'], prefixes=["."]))
+    async def request_logs(client, msg):
+        await util.check_user(db, msg)
+        await log_bot(msg)
+
+        if str(msg.from_user.id) != ADMIN_ID:
+            return -1
+        message = await client.send_message(
+            chat_id=msg.chat.id,
+            text="Подождите немного, загружаю документ... ⏳"
+        )
+
+        # Путь к файлу, который вы хотите отправить
+        file_path = "aicy.log"
+        await client.send_document(
+            chat_id=msg.chat.id,  # ID чата, куда отправляется файл
+            document=file_path,       # Путь к файлу
+            caption="Вот ваш файл 📄",  # Подпись к файлу
+        )
+        await client.delete_messages(
+            chat_id=msg.chat.id,
+            message_ids=message.id
+        )
+    
